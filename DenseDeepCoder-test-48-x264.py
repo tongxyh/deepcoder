@@ -243,24 +243,19 @@ mid_channel = 4
 for i in range(mid_channel):
 	cv2.imwrite('res'+str(i)+'.png',encoder_maps[0][:,:,i]*255.0)
 
-os.system("ffmpeg  -f image2 -i ./res%d.png -c:v libx264 -r 20 -qp 27 res.h264")
+os.system("ffmpeg  -f image2 -i ./res%d.png -c:v libx264 -r 20 -qp " + str(QuanBits) + " res.h264")
+os.system("rm ./res*.png")
 os.system("ffmpeg -i  ./res.h264 -r 20 -f image2 decode%d.png")
 
 for i in range(0,mid_channel):
     encoder_map[0][:,:,i] = plt.imread('./decode'+str(i+1)+'.png')[:,:,0]
 
-
-# save the smaller one
-#if (bi_prebits <= avgbits):
-    #bitss.append(bi_prebits)
-    #decis.append(1)
-#else:
-    #bitss.append(avgbits)
-    #decis.append(0)
+os.system("rm ./decode*.png")
 
 recons = decoder([encoder_map*1.0/QUAN_LEV*(max_val - min_val) + min_val])[0]
 
-#res = autoencoder.predict(im)
+recons[recons > 1] = 1
+recons[recons < 0] = 0
 ms_ssim = msssim.MultiScaleSSIM(im*255.0, recons*255.0, max_val=255, filter_size=11, filter_sigma=1.5,
                    k1=0.01, k2=0.03, weights=None)
 

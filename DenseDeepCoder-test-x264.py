@@ -206,15 +206,17 @@ mid_channel=2
 for i in range(mid_channel):
 	cv2.imwrite('res'+str(i)+'.png',encoder_maps[0][:,:,i]*255.0)
 
-os.system("ffmpeg  -f image2 -i ./res%d.png -c:v libx264 -r 20 -qp 25 res.h264")
+os.system("ffmpeg  -f image2 -i ./res%d.png -c:v libx264 -r 20 -qp "+str(QuanBits)+" res.h264")
+os.system("rm ./res*.png")
 os.system("ffmpeg -i  ./res.h264 -r 20 -f image2 decode%d.png")
 
 for i in range(0,mid_channel):
     encoder_map[0][:,:,i] = plt.imread('./decode'+str(i+1)+'.png')[:,:,0]
 
+os.system("rm ./decode*.png")
+
 #decode
 recons = decoder([encoder_map*(1.0/QUAN_LEV)*(max_val - min_val) + min_val])[0]
-#res = autoencoder.predict(im)
 
 recons[recons > 1] = 1
 recons[recons < 0] = 0
@@ -226,4 +228,4 @@ print(ms_ssim)
 #recons = recons.reshape(H,W,3)*255.0
 recons = recons.reshape(H,W,3)
 
-plt.imsave('/home/chentong/deepcoder/WeightedQUAN/DenseNet/DeepCoder-20170928/result/x264-'+ImageIndex+'-'+str(QuanBits)+'-'+ModelIndex+'-'+str(args.channel)+'.bmp',recons)
+plt.imsave('/home/chentong/deepcoder/WeightedQUAN/DenseNet/DeepCoder-20170928/result/result-x264-'+ImageIndex+'-'+str(QuanBits)+'-'+ModelIndex+'-'+str(args.channel)+'.bmp',recons)
