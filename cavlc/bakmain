@@ -1,0 +1,304 @@
+#include <iostream>
+#include <Eigen/Dense>
+#include <vector>
+#include <string>
+#include "main.h"
+#include <cmath>
+#include <fstream>
+#include <sstream>
+#include <bitset>
+#include <assert.h>
+
+using namespace std;
+using Eigen::MatrixXd;
+
+Table<string> table_0,table_1,table_2,table_3,table_r,table_z;
+
+int readtable(ifstream & fin,const string key,Table<string> &tb)
+{
+	vector<vector<string>> vec_str;
+	string line;
+	while(getline(fin,line)&&line!=key)
+	{
+		istringstream sstr(line);
+		string word;
+		vector<string> temp;
+		while(sstr>>word)
+		{
+			if(word.size()<2){
+				cout<<key<<" wrong input"<<endl;
+				return -1;
+			}
+			temp.push_back(word.substr(1,word.size()-2));
+		}
+		vec_str.push_back(temp);
+	}
+	tb.modify(vec_str);	
+	return 0;
+}
+/*
+ * 实现十进制转换为二进制存储在string中,用指定长度的length表示,如果length表示不下则用实际长度进行表示
+ */
+string dec2bin(int);
+string dec2bin_length(int num,int length)
+{
+	assert(num>=0&&length>=1);
+	string res;
+	res=dec2bin(num);
+	int  len=res.size();
+	if(len>length)
+		res=res.substr(len-length,length);
+	else 
+	{
+		string head(length-len,'0');
+		res=head+res;
+	}
+	return res;
+
+}
+
+string dec2bin(int num)
+{
+	if(num==0)
+		return "0";
+	if(num==1)
+		return "1";
+	return dec2bin(num>>2)+to_string(num%2);
+}
+string enc_cavlc_unit(vector<int> data,unsigned int nL,unsigned int nU)
+{
+
+	uint8_t i_total=0;										 //非零系数的个数
+	uint8_t i_total_zeros=0;	//最后一个非空系数前0的个数
+	uint8_t i_trailing=0;		//拖尾系数的个数,最多为3个
+	string sign;  //拖尾符号组合,
+	vector<int32_t> run,level;//非零系数前面截止到另一个非零系数前面中间0的个数,非零系数
+	string bit; //最终返回值
+
+
+	int i_last=data.size()-1; //针对4*4的小块进行处理
+
+	while((i_last>=0)&&(data[i_last]==0))
+		{--i_last;} //定位到第一个非零系数
+
+	int idx=0;
+
+	/*
+	 * 找到level,拖尾系数,run,和total_zeros
+	 */
+
+	while(i_last>=0&&abs(data[i_last])==1&&i_trailing<3)
+	{
+		level.push_back(data[i_last]);
+		++i_total;
+		++i_trailing;
+
+		if(data[i_last]==-1)
+			sign+="1";
+		else 
+			sign+="0";
+
+		run.push_back(0);
+		--i_last;
+
+		
+		while(i_last>=0&&data[i_last]==0)
+		{
+			run[idx]++;
+			i_total_zeros++;
+			i_last--;
+		}
+		++idx;
+
+	}
+
+	while(i_last>=0)
+	{
+		level.push_back(data[i_last]);
+		++i_total;
+
+		run.push_back(0);
+		--i_last;
+		while(i_last>=0&&data[i_last]==0)
+		{
+			run[idx]=++run[idx];
+			++i_total_zeros;
+			--i_last;
+		}
+		++idx;
+	}
+
+	/*
+	 * encode coeff_token
+	 */
+	
+	int32_t n;
+	if(nL>0&&nU>0)
+		n=(nL+nU)/2;
+	else if(nL>0||nU>0)
+		n=nL+nU;
+	else 
+		n=0;
+	Table<string> table_coeff;
+	if(n>=0&&n<2)
+		table_coeff=table_0;
+	else if(n>=2&&n<4)
+		table_coeff=table_1;
+	else if(n>=4&&n<8)
+		table_coeff=table_2;
+	else 
+		table_coeff=table_3;
+
+
+	string  coeff_token=table_coeff[i_total][i_trailing];
+	bit+=coeff_token;
+
+	if(i_total==0)
+		return bit;
+
+	/*
+	 * 如果拖尾系数不为0,则需要编码拖尾系数的符号
+	 */
+
+	if(i_trailing>0)
+		bit+=sign;
+
+	/*
+	 * 编码除了拖尾系数的非零系数
+	 */
+
+	//initial suffix length 
+
+	uint32_t i_sufx_len =0;
+
+	if(i_total>10&&i_trailing<3)
+		i_sufx_len=1;
+
+	for(int i=i_trailing;i<i_total;++i)
+	{
+		int i_level_code;
+		if(level[i]<0)
+			i_level_code=-2*level[i]-1;
+		else 
+			i_level_code=2*level[i]-2;
+			
+	//对于第一个非零系数,并且拖尾系数小于3的情况下,需要更新i_level_code	
+		if(i==i_trailing&&i_trailing<3)
+			i_level_code = i_level_code-2;
+
+		int level_prfx;
+		if(i_level_code>>i_sufx_len<14)
+		{
+			//处理前缀
+			level_prfx=i_level_code>>i_sufx_len;
+			while(level_prfx>0)
+				{bit+="0";--level_prfx;}
+			bit+="1";
+			//处理后缀
+			
+			if(i_sufx_len>0)
+			{
+			bit+=dec2bin_length(i_level_code,i_sufx_len);
+			}
+		}	
+		else if(i_sufx_len==0&&i_level_code<30)
+		{
+			level_prfx=14;
+			while(level_prfx>0)
+				{bit+="0";--level_prfx;}
+			bit+="1";
+
+			bit+=dec2bin_length(i_level_code-14,4);
+
+		}
+
+		else if(i_sufx_len>0&&(i_level_code>>i_sufx_len)==14)
+		{
+			level_prfx=14;
+			while(level_prfx>0)
+				{bit+="0";--level_prfx;}
+			bit+="1";
+
+			bit+=dec2bin_length(i_level_code,i_sufx_len);
+		}
+
+		else 
+		{
+			level_prfx=15;
+			while(level_prfx>0)
+				{bit+="0";--level_prfx;}
+			bit+="1";
+
+			i_level_code -= (15<<i_sufx_len);
+
+			if(i_sufx_len==0)
+				i_level_code -= 15;
+
+			assert((i_level_code<(1<<12))&&i_level_code>=0);
+
+			bit+=dec2bin_length(i_level_code,12);
+			
+
+		}
+
+	if(i_sufx_len==0)
+		++i_sufx_len;
+	else if (abs(level[i])>(3<<(i_sufx_len-1))&&i_sufx_len<6)
+		++i_sufx_len;
+	}
+
+	// encode total_zeros 
+	
+	if(i_total<data.size())
+	{
+		// i_total>0, 如果等于0在之前就返回了
+		bit+=table_z[i_total-1][i_total_zeros];
+	}
+
+
+	//encode each run of zeros 
+	
+	int i_zero_left=i_total_zeros;
+
+	if(i_zero_left>=1)
+	{
+		for(int i=0;i<i_total;++i)
+		{
+			if(i_zero_left>0&&(i==i_total-1))
+				break;
+			if(i_zero_left>=1)
+			{
+				int i_zl=min(i_zero_left-1,6);
+				string run_before=table_r[run[i]][i_zl];
+				bit+=run_before;
+				i_zero_left -= run[i];
+			}
+		}
+	}
+
+
+	return bit;
+}
+
+int main()
+{
+	ifstream fin("table");
+	if(!fin)
+		{cout<<"no such file"<<endl;return -1;}
+
+	readtable(fin,"table_coeff0",table_0);
+	readtable(fin,"table_coeff1",table_1);
+	readtable(fin,"table_coeff2",table_2);
+	readtable(fin,"table_coeff3",table_3);
+	readtable(fin,"table_run",table_r);
+	readtable(fin,"table_zeros",table_z);
+
+	//vector<int> data{200,-1,-7,-1,-4,-3,1,-5,-6,1,-1,2,2,4,20,1};
+	//vector<int> data{0,3,0,1,-1,-1,0,1,0,0,0,0,0,0,0,0};
+	vector<int> data{-2,4,3,-3,0,0,-1,0,0,0,0,0,0,0,0,0};
+	string bit=enc_cavlc_unit(data,0,0);
+	cout<<bit<<endl;
+
+	return 0;
+
+} 
