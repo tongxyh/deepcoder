@@ -212,32 +212,16 @@ os.system("ffmpeg -i  ./res.h264 -r 20 -f image2 decode%d.png")
 for i in range(0,mid_channel):
     encoder_map[0][:,:,i] = plt.imread('./decode'+str(i+1)+'.png')[:,:,0]
 
-'''
-#huffman
-ModelLevel = int(ModelIndex)/3.0
-
-avgbits,codec0 = utili.huffman_coding(encoder_maps, 0 , QUAN_LEV,H,W)
-avgbits = avgbits/ModelLevel + np.double(utili.huffman_head(codec0)) / H / W
-
-bi_avg, bi_res = block.crop(encoder_maps)
-bi_avgbits,codec1 = utili.huffman_coding(bi_avg, 0 ,QUAN_LEV,H,W)
-bi_resbits,codec2 = utili.huffman_coding(bi_res,-QUAN_LEV,QUAN_LEV,H,W)
-bi_prebits = bi_avgbits / ModelLevel / 16.0 + bi_resbits / ModelLevel + np.double(utili.huffman_head(codec1)) / H / W + np.double(utili.huffman_head(codec2)) / H / W
-'''
 #decode
 recons = decoder([encoder_map*(1.0/QUAN_LEV)*(max_val - min_val) + min_val])[0]
 #res = autoencoder.predict(im)
 
+recons[recons > 1] = 1
+recons[recons < 0] = 0
+
 ms_ssim = msssim.MultiScaleSSIM(im*255.0, recons*255.0, max_val=255, filter_size=11, filter_sigma=1.5,
                    k1=0.01, k2=0.03, weights=None)
 
-'''
-print("orginal bits:", avgbits,"after prediction:", bi_prebits)
-if avgbits < bi_prebits:
-    print("bpp: ",avgbits," MS-SSIM:",ms_ssim)
-else:
-    print("bpp: ",bi_prebits," MS-SSIM:",ms_ssim)
-'''
 print(ms_ssim)
 #recons = recons.reshape(H,W,3)*255.0
 recons = recons.reshape(H,W,3)
