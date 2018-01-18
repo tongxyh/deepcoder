@@ -1,4 +1,7 @@
-#import tensorflow as tf
+#using GPU 1
+#set this before Keras / Tensorflow is imported.
+import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 import keras
 from keras.layers import Conv2D,MaxPool2D,Input,BatchNormalization,Lambda
 from keras.layers import Activation,concatenate,AveragePooling2D,UpSampling2D
