@@ -1,6 +1,6 @@
 import os
 #using GPU 0
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 import tensorflow as tf
 import sys
@@ -37,11 +37,11 @@ def quantizer_nog(x):
     return g_x
 '''
 
-def cal_rloss(x,value_range = [-10.0,10.0],nbins=40):
+def cal_rloss(x,value_range = [-16.0,16.0],nbins=64):
     #vmax = tf.reduce_max(x)
     #vmin = tf.reduce_min(x)
-    vmin = -10.0
-    vmax = 10.0
+    vmin = -16.0
+    vmax = 16.0
     interval = (vmax - vmin) / nbins
     #vmax = tf.argmax(tf.argmax(tf.argmax(tf.argmax(x,axis = 3),axis = 2),axis = 1),axis=0)  #it return index not value
     #vmax_1 = tf.argmax(tf.argmax(tf.argmax(tf.argmax(x,axis = -1),axis = -1),axis = -1),axis=-1) #same
@@ -86,13 +86,25 @@ def conv(x, Wx, Wy,inputchannels, outputchannels, stridex=1, stridey=1, padding=
     return conv
 
 def deepcoder(in_gt,IMG_W,IMG_H,IMG_C):
-    x = tf.keras.layers.Conv2D(4, (3, 3), padding='same',name = "Conv2D_0")(in_gt)
-    x_0 = tf.keras.layers.AveragePooling2D((2,2))(x)
-    q_x = quantizer(x_0)
-    x1 = tf.keras.layers.Conv2D(4, (3, 3), padding='same',name= "Conv2D_1")(q_x)
-    x2 = tf.keras.layers.UpSampling2D((2,2))(x1)
-    output = tf.keras.layers.Conv2D(3, (3, 3), padding='same',name = "Conv2D_2")(x2)
-    return x_0,q_x,output
+    conv_0 = tf.keras.layers.Conv2D(32, (3, 3), padding='same',name = "Conv2D_0")(in_gt)
+    pool_0 = tf.keras.layers.AveragePooling2D((2,2))(conv_0)
+    conv_1 = tf.keras.layers.Conv2D(32, (3, 3), padding='same',name = "Conv2D_1")(pool_0)
+    pool_1 = tf.keras.layers.AveragePooling2D((2,2))(conv_1)
+    conv_2 = tf.keras.layers.Conv2D(32, (3, 3), padding='same',name = "Conv2D_2")(pool_1)
+    pool_2 = tf.keras.layers.AveragePooling2D((2,2))(conv_2)
+    conv_3 = tf.keras.layers.Conv2D(4, (3, 3), padding='same',name = "Conv2D_3")(pool_2)
+
+    q_x = quantizer(conv_3)
+
+    dconv_0 = tf.keras.layers.Conv2D(32, (3, 3), padding='same',name = "dConv2D_0")(q_x)
+    up_0 = tf.keras.layers.UpSampling2D((2,2))(dconv_0)
+    dconv_1 = tf.keras.layers.Conv2D(32, (3, 3), padding='same',name= "dConv2D_1")(up_0)
+    up_1 = tf.keras.layers.UpSampling2D((2,2))(dconv_1)
+    dconv_2 = tf.keras.layers.Conv2D(32, (3, 3), padding='same',name= "dConv2D_2")(up_1)
+    up_2 = tf.keras.layers.UpSampling2D((2,2))(dconv_2)
+    dconv_3 = tf.keras.layers.Conv2D(32, (3, 3), padding='same',name = "dConv2D_3")(up_2)
+    output = tf.keras.layers.Conv2D(3, (3, 3), padding='same',name = "dConv2D_4")(dconv_3)
+    return conv_3,q_x,output
 
 file_train = h5py.File(r'../FeatureVisualization/train64.h5','r')
 train_data = file_train['data'][:].transpose(0,3,2,1)
@@ -106,7 +118,7 @@ IMG_W = 64
 IMG_H = 64
 IMG_C = 3
 
-train_index = 8
+train_index = 11
 
 gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.9)
 with tf.Session(config=tf.ConfigProto(gpu_options=gpu_options)) as sess:
@@ -141,9 +153,9 @@ with tf.Session(config=tf.ConfigProto(gpu_options=gpu_options)) as sess:
 
     tf.global_variables_initializer().run()
 
-    saver = tf.train.Saver()
+    saver = tf.train.Saver(max_to_keep=100)
     #saver.restore(sess, "/home/penglu/Desktop/lp/model.ckpt")
-    for epoch in range(101):
+    for epoch in range(100):
         shuffle_idx = np.random.permutation(datasize)
         batch_num = int(datasize/batchsize)
         ls = 0
@@ -151,12 +163,16 @@ with tf.Session(config=tf.ConfigProto(gpu_options=gpu_options)) as sess:
         for i in range(batch_num):
             summary,_,vq_x,vrloss,vdloss,vloss,vd = sess.run([merged,optimizer,q_x,rloss,dloss,loss,d],feed_dict={in_gt : train_data[shuffle_idx[batchsize*i:batchsize*(i+1)]]})
             ls = ls + vloss;
-            print('epoch:',epoch,'loss: ',ls/i,"r: ", vrloss,"d: ",vdloss)
+
+            #vloss avg
+            #dloss avg
+
+            print('epoch:',epoch,'loss: ',ls/(i+1),"r: ", vrloss,"d: ",vdloss)
             #print(vrloss,vdloss)
             train_writer.add_summary(summary, batch_num+epoch*batchsize)
         #loss = evaluate(test_data)
         #sess.run([merged,q_x,rloss,dloss,loss],feed_dict={in_gt : batch[batchsize*i:batchsize*(i+1),:,:,:]})
 
-        saver.save(sess, "/home/chentong/deepcoder/WeightedQUAN/DenseNet/DeepCoder-20170928/models/"+str(train_index)+"/model-"+str(epoch)+".ckpt")
+        saver.save(sess, "/home/chentong/deepcoder/WeightedQUAN/DenseNet/DeepCoder-20170928/models/"+str(train_index)+"/model.ckpt",global_step=epoch)
 
 train_writer.close()
