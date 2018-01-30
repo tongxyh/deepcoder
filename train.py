@@ -32,7 +32,7 @@ def quantizer(x):
         return g_x
 
 '''
-def quantizer_nog(x):
+def quantizer_norm(x):
     g_x = tf.round(x*10.0)/10.0
     return g_x
 '''
@@ -95,6 +95,11 @@ def deepcoder(in_gt,IMG_W,IMG_H,IMG_C):
     conv_3 = tf.keras.layers.Conv2D(4, (3, 3), padding='same',name = "Conv2D_3")(pool_2)
 
     q_x = quantizer(conv_3)
+    #q_1 = quantizer_v2()
+    #q_2 = quantizer_v4()
+    #q_3 = quantizer_v6()
+    #q_4 = quantizer_v8()
+    #q_x = mask_fusion(q_1,q_2,q_3,q_4)
 
     dconv_0 = tf.keras.layers.Conv2D(32, (3, 3), padding='same',name = "dConv2D_0")(q_x)
     up_0 = tf.keras.layers.UpSampling2D((2,2))(dconv_0)

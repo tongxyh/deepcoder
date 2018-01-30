@@ -10,11 +10,13 @@ import matplotlib.pyplot as plt
 
 
 sys.path.append('/home/chentong/deepcoder/WeightedQUAN')
+sys.path.append('/home/chentong/deepcoder/python-huffman')
 sys.path.append('/home/chentong/deepcoder/WeightedQUAN/DenseNet') #utili.py
 sys.path.append('/home/chentong/deepcoder/WeightedQUAN/DenseNet/blockpredict') #block
 import blockpred as bpred
 import msssim
 import utili
+import tofile
 
 G = tf.get_default_graph()
 def quantizer(x):
@@ -72,19 +74,40 @@ def deepcoder_v10(in_gt,IMG_W,IMG_H,IMG_C):
     output = tf.keras.layers.Conv2D(3, (3, 3), padding='same',name = "dConv2D_3")(dconv_2)
     return conv_2,q_x,output
 
+def deepcoder_v11(in_gt,IMG_W,IMG_H,IMG_C):
+    conv_0 = tf.keras.layers.Conv2D(32, (3, 3), padding='same',name = "Conv2D_0")(in_gt)
+    pool_0 = tf.keras.layers.AveragePooling2D((2,2))(conv_0)
+    conv_1 = tf.keras.layers.Conv2D(32, (3, 3), padding='same',name = "Conv2D_1")(pool_0)
+    pool_1 = tf.keras.layers.AveragePooling2D((2,2))(conv_1)
+    conv_2 = tf.keras.layers.Conv2D(32, (3, 3), padding='same',name = "Conv2D_2")(pool_1)
+    pool_2 = tf.keras.layers.AveragePooling2D((2,2))(conv_2)
+    conv_3 = tf.keras.layers.Conv2D(4, (3, 3), padding='same',name = "Conv2D_3")(pool_2)
+
+    q_x = quantizer(conv_3)
+
+    dconv_0 = tf.keras.layers.Conv2D(32, (3, 3), padding='same',name = "dConv2D_0")(q_x)
+    up_0 = tf.keras.layers.UpSampling2D((2,2))(dconv_0)
+    dconv_1 = tf.keras.layers.Conv2D(32, (3, 3), padding='same',name= "dConv2D_1")(up_0)
+    up_1 = tf.keras.layers.UpSampling2D((2,2))(dconv_1)
+    dconv_2 = tf.keras.layers.Conv2D(32, (3, 3), padding='same',name= "dConv2D_2")(up_1)
+    up_2 = tf.keras.layers.UpSampling2D((2,2))(dconv_2)
+    dconv_3 = tf.keras.layers.Conv2D(32, (3, 3), padding='same',name = "dConv2D_3")(up_2)
+    output = tf.keras.layers.Conv2D(3, (3, 3), padding='same',name = "dConv2D_4")(dconv_3)
+    return conv_3,q_x,output
+
 test_img = plt.imread("/home/chentong/deepcoder/WeightedQUAN/kodar/kodim01.bmp")
 #print(test_img)
 [IMG_H,IMG_W,IMG_C] = test_img.shape
 
 ModelIndex = sys.argv[1]
 train_idx = sys.argv[2]
-input_idx = "kodim02"
+input_idx = "kodim01"
 
-gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.9)
+gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.5)
 with tf.Session(config=tf.ConfigProto(gpu_options=gpu_options)) as sess:
 
     in_gt = tf.placeholder(tf.float32, shape=[1, IMG_H, IMG_W, IMG_C])
-    x_0,q_x,out = deepcoder_v10(in_gt,IMG_W,IMG_H,IMG_C)
+    x_0,q_x,out = deepcoder_v11(in_gt,IMG_W,IMG_H,IMG_C)
     saver = tf.train.Saver()
     saver.restore(sess, "/home/chentong/deepcoder/WeightedQUAN/DenseNet/DeepCoder-20170928/models/"+str(train_idx)+"/model.ckpt-"+ModelIndex)
 
@@ -100,6 +123,8 @@ with tf.Session(config=tf.ConfigProto(gpu_options=gpu_options)) as sess:
     avgbits,codec0 = utili.huffman_coding(bin_data, -QUAN_LEV , QUAN_LEV,IMG_H,IMG_W)
     avgbits = avgbits/ModelLevel + np.double(utili.huffman_head(codec0)) / IMG_H / IMG_W
 
+    tofile.write("Input-"+ input_idx + "-Model-"+ModelIndex+"-train-"+str(train_idx)+'.deepc',bin_data,codec0)
+
     bi_avg, bi_res = bpred.crop(bin_data)
     bi_avgbits,codec1 = utili.huffman_coding(bi_avg, -QUAN_LEV , QUAN_LEV,IMG_H,IMG_W)
     bi_resbits,codec2 = utili.huffman_coding(bi_res,-QUAN_LEV,QUAN_LEV,IMG_H,IMG_W)
@@ -114,4 +139,4 @@ with tf.Session(config=tf.ConfigProto(gpu_options=gpu_options)) as sess:
 
     print(avgbits,bi_prebits,ms_ssim,vmin,vmax)
 
-    plt.imsave("./result/Input-"+ input_idx + "-Model-"+ModelIndex+"-train-"+str(train_idx)+".png",recons[0])
+    #plt.imsave("./result/Input-"+ input_idx + "-Model-"+ModelIndex+"-train-"+str(train_idx)+".png",recons[0])

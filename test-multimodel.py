@@ -136,4 +136,4 @@ with tf.Session(config=tf.ConfigProto(gpu_options=gpu_options)) as sess:
 
         #print(ModelIndex,avgbits,bi_prebits,ms_ssim,vmin,vmax)
         print avgbits,bi_prebits,ms_ssim
-        plt.imsave("./result/train-"+str(train_idx)+"/Input-"+ input_idx + "-Model-" + str(ModelIndex) + ".png" ,recons[0])
+        #plt.imsave("./result/train-"+str(train_idx)+"/Input-"+ input_idx + "-Model-" + str(ModelIndex) + ".png" ,recons[0])
