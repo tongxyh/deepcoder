@@ -33,7 +33,7 @@ def quantizer(x):
 
 '''
 def quantizer_norm(x):
-    g_x = tf.round(x*10.0)/10.0
+    g_x = tf.round(x*tf.reduce_max(x))/10.0
     return g_x
 '''
 
