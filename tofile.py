@@ -3,20 +3,32 @@ import numpy as np
 import huffman
 import bitstring
 import struct
+class iminfo(object):
+    def __init__(self,imshape = None):
+        self.imshape = imshape
+
+class fmaps_info(object):
+    def __init__(self,fmasp_shape = None):
+        self.fmaps_shape = fmaps_shape
 
 class bin_data(object):
     def __init__(self,data = None,codec = None,shape = None,lens = -1):
         self.data = data
         self.codec = codec
-        self.shape = shape
+        self.iminfo = iminfo
+        self.fmaps_info = fmaps_info
         self.lens = lens
 
-def write_head(codec,N,H,W,C,file_object):
+def write_head(b_data,file_object):
+    bytes = struct.pack('3i',b_data.iminfo.imshape[0],b_data.iminfo.imshape[1],b_data.iminfo.imshape[2])     # Image Shape
+    offset = struct.calcsize('3i')
+    file_object.write(bytes)
 
-    bytes = struct.pack('4i',N,H,W,C)     # N,H,W,C
+    bytes = struct.pack('4i',b_data.fmaps_info.fmaps_shape[0],b_data.fmaps_info.fmaps_shape[1],b_data.fmaps_info.fmaps_shape[2],b_data.fmaps_info.fmaps_shape[3])     # Feature maps Shape
     offset = struct.calcsize('4i')
     file_object.write(bytes)
 
+    codec = b_data.codec
     bytes = struct.pack('i',len(codec))     # codec NUM
     offset = struct.calcsize('i') + offset
     file_object.write(bytes)
@@ -43,7 +55,8 @@ def read_head(file_object):
     #print(string)
     b_data = bin_data()
 
-    b_data.shape = struct.unpack('4i',file_object.read(16))
+    b_data.iminfo = struct.unpack('3i',file_object.read(12))
+    b_data.fmaps_info = struct.unpack('4i',file_object.read(16))
 
     codec_num = struct.unpack("i",file_object.read(4))[0]
     dict_codec={}
@@ -62,13 +75,19 @@ def read_head(file_object):
     b_data.codec = dict_codec
     return b_data
 
-def write(filename,arr,codec):
+def write(filename,im,arr,codec):
     #write
+    b_data = bin_data(data=arr,codec=codec)
     file_object = open(filename, 'wb')
-    N,H,W,C = arr.shape
-    sizehead = write_head(codec,N,H,W,C,file_object)
+
+    b_data.fmaps_info.fmaps_shape = arr.shape
+    b_data.iminfo.imshape = im.shape
+
+    sizehead = write_head(b_data,file_object)
+
     sizearr = huffman.encode(arr,codec,file_object)
     sizearr = int(np.ceil(sizearr/8.0)*8)
+
     file_object.close()
     #print('head:',sizehead,'bytes')
     #print('arr:',sizearr,'bytes')
