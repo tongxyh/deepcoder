@@ -8,63 +8,53 @@ import tensorflow as tf
 import numpy as np
 import matplotlib.pyplot as plt
 
-
-sys.path.append('/home/chentong/deepcoder/WeightedQUAN')
 sys.path.append('/home/chentong/deepcoder/python-huffman')
-sys.path.append('/home/chentong/deepcoder/WeightedQUAN/DenseNet') #utili.py
-sys.path.append('/home/chentong/deepcoder/WeightedQUAN/DenseNet/blockpredict') #block
+sys.path.append('/home/chentong/deepcoder/DenseNet') #utili.py
+sys.path.append('/home/chentong/deepcoder/DenseNet/blockpredict') #block
 import blockpred as bpred
 import msssim
 import utili
 import tofile
 import time
-
-def deep_decoder_v11(q_x):
-    dconv_0 = tf.keras.layers.Conv2D(32, (3, 3), padding='same',name = "dConv2D_0")(q_x)
-    up_0 = tf.keras.layers.UpSampling2D((2,2))(dconv_0)
-    dconv_1 = tf.keras.layers.Conv2D(32, (3, 3), padding='same',name= "dConv2D_1")(up_0)
-    up_1 = tf.keras.layers.UpSampling2D((2,2))(dconv_1)
-    dconv_2 = tf.keras.layers.Conv2D(32, (3, 3), padding='same',name= "dConv2D_2")(up_1)
-    up_2 = tf.keras.layers.UpSampling2D((2,2))(dconv_2)
-    dconv_3 = tf.keras.layers.Conv2D(32, (3, 3), padding='same',name = "dConv2D_3")(up_2)
-    output = tf.keras.layers.Conv2D(3, (3, 3), padding='same',name = "dConv2D_4")(dconv_3)
-    return output
-
-test_img = plt.imread("/home/chentong/deepcoder/WeightedQUAN/kodar/kodim01.bmp")
-#print(test_img)
-IMG_H, IMG_W, IMG_C = test_img.shape
+import model
 
 ModelIndex = sys.argv[1]
 train_idx = sys.argv[2]
-input_idx = "kodim01"
 
-gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.5)
+input_idx = sys.argv[4]
+
+gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.9)
 with tf.Session(config=tf.ConfigProto(gpu_options=gpu_options)) as sess:
     #huffman decode
 
     time_start = time.time()
 
-    bin_data = tofile.read("Input-"+ input_idx + "-Model-"+ModelIndex+"-train-"+str(train_idx)+'.deepc')
+    bin_data = tofile.read("bin/"+input_idx + "-Model-"+ModelIndex+"-train-"+str(train_idx)[-2:]+'.deepc')
     time_decode_huffman = time.time()
 
-    N,H,W,C = bin_data.shape
+    N,H,W,C = bin_data.fmaps_info.fmaps_shape
+    IMG_H, IMG_W, IMG_C = bin_data.iminfo.imshape
 
-    q_x = tf.placeholder(tf.float32, shape=[N, H, W, C])
-    out = deep_decoder_v11(q_x)
+    #q_x = tf.placeholder(tf.float32, shape=[N, H, W, C])
+    in_gt = tf.placeholder(tf.float32, shape=[1, IMG_H, IMG_W, IMG_C])
+
+    q_x = model.deepcoder_bn_encoder(in_gt)
+    out = model.deepcoder_bn_decoder(q_x)
 
     saver = tf.train.Saver()
-    saver.restore(sess, "/home/chentong/deepcoder/WeightedQUAN/DenseNet/DeepCoder-20170928/models/"+str(train_idx)+"/model.ckpt-"+ModelIndex)
+    saver.restore(sess, "models/"+str(train_idx)+"/model.ckpt-"+ModelIndex)
 
-    [recons] = sess.run([out],feed_dict={q_x : bin_data})
+    in_data = (bin_data.data+0.49)/31.98
+    print(in_data)
+    [recons] = sess.run([out],feed_dict={q_x : in_data})
 
     recons[recons > 1] = 1
     recons[recons < 0] = 0
+    recons = recons[:,:IMG_H,:IMG_W,:]
 
-    plt.imsave("./result/Input-"+ input_idx + "-Model-"+ModelIndex+"-train-"+str(train_idx)+".png",recons[0])
+    print(recons[0])
+
+    plt.imsave("./result/Input-"+ input_idx + "-Model-"+ModelIndex+"-train-"+str(train_idx)[-2:]+".png",recons[0])
     time_end=time.time()
     print('huffman decode cost:',time_decode_huffman-time_start ,'s')
     print('totally cost',time_end-time_start,'s')
-    #ms-ssim
-    ms_ssim = msssim.MultiScaleSSIM(np.reshape(test_img,[1, IMG_H, IMG_W, IMG_C]), recons*255.0, max_val=255, filter_size=11, filter_sigma=1.5,
-                       k1=0.01, k2=0.03, weights=None)
-    print('ms_ssim:', ms_ssim)
