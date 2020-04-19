@@ -13,7 +13,7 @@ import numpy as np
 #Treat it as a Class
 class rate_loss(nn.Module):
     # rate_loss for pytorch-0.4.0
-    # Updated 2018.6.29
+    # Written by Tong Chen at 2018.6.29
     def __init__(self, bins_per_unit=5,device_id=0):
         super(rate_loss, self).__init__()
         self.bins_per_unit = bins_per_unit
@@ -59,8 +59,8 @@ class rate_loss(nn.Module):
 
             if d.size()[0] > 0: # dismiss zero
                 nloss = (d - (vmin_new+i*interval)) * g[0,0,i]  + hist_add[0,0,i] + 0.00000001
-                log_rloss = torch.log(nloss)
-                rloss = - torch.sum(log_rloss)
+                log_rloss = torch.log(nloss) / -torch.log(2.0)
+                rloss = torch.sum(log_rloss)
             return rloss
 
         rloss = 0.0
